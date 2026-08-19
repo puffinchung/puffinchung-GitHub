@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -5,10 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>足跡樂尋 · LINE 樂活健走</title>
 
-  <!-- LINE LIFF SDK -->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-
-  <!-- Supabase SDK（讓網頁能連上資料庫）-->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
@@ -30,7 +28,6 @@
       min-height: 100vh;
       box-sizing: border-box;
     }
-
     #loading-mask {
       position: fixed;
       inset: 0;
@@ -54,7 +51,6 @@
       margin-bottom: 16px;
     }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
     .user-card {
       background: var(--card-bg);
       width: 100%;
@@ -77,7 +73,6 @@
     .user-info { display: flex; flex-direction: column; gap: 4px; }
     .user-name { font-size: 22px; font-weight: bold; color: var(--text); }
     .user-status { font-size: 15px; color: #666; }
-
     .section-title {
       font-size: 20px;
       font-weight: bold;
@@ -102,12 +97,12 @@
     }
     .btn-action:active { transform: scale(0.98); }
     .btn-share { background-color: #06C755; }
-
     .save-status {
       font-size: 13px;
       color: #888;
       margin-top: 6px;
       min-height: 18px;
+      word-break: break-all;
     }
   </style>
 </head>
@@ -144,7 +139,6 @@
     window.onload = async function() {
       try {
         await liff.init({ liffId: MY_LIFF_ID });
-
         if (liff.isLoggedIn()) {
           await fetchUserProfile();
         } else {
@@ -192,14 +186,14 @@
 
         if (error) {
           console.error("存入資料庫失敗：", error);
-          statusEl.textContent = "資料儲存失敗（可再試一次）";
+          statusEl.textContent = "失敗原因：" + (error.message || JSON.stringify(error));
         } else {
           console.log("使用者資料已存入資料庫");
           statusEl.textContent = "資料已同步 ✓";
         }
       } catch (err) {
         console.error("儲存過程發生錯誤：", err);
-        statusEl.textContent = "資料儲存發生錯誤";
+        statusEl.textContent = "發生例外：" + (err.message || JSON.stringify(err));
       }
     }
 
