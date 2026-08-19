@@ -4,10 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>足跡樂尋 · LINE 樂活健走</title>
-  
-  <!-- 1. 引入 LINE LIFF SDK (V2) -->
+
+  <!-- LINE LIFF SDK -->
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  
+
+  <!-- Supabase SDK（讓網頁能連上資料庫）-->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <style>
     :root {
       --primary: #1F5F5B;
@@ -28,7 +31,6 @@
       box-sizing: border-box;
     }
 
-    /* 載入中遮罩 */
     #loading-mask {
       position: fixed;
       inset: 0;
@@ -53,7 +55,6 @@
     }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-    /* 主要內容卡片 */
     .user-card {
       background: var(--card-bg);
       width: 100%;
@@ -77,7 +78,6 @@
     .user-name { font-size: 22px; font-weight: bold; color: var(--text); }
     .user-status { font-size: 15px; color: #666; }
 
-    /* 功能區域 */
     .section-title {
       font-size: 20px;
       font-weight: bold;
@@ -101,48 +101,53 @@
       margin-top: 10px;
     }
     .btn-action:active { transform: scale(0.98); }
-    .btn-share { background-color: #06C755; } /* LINE 綠色 */
+    .btn-share { background-color: #06C755; }
+
+    .save-status {
+      font-size: 13px;
+      color: #888;
+      margin-top: 6px;
+      min-height: 18px;
+    }
   </style>
 </head>
 <body>
 
-  <!-- 載入中畫面 (防止長輩看到畫面閃爍) -->
   <div id="loading-mask">
     <div class="spinner"></div>
     <div id="loading-text">正在連結 LINE 帳號...</div>
   </div>
 
-  <!-- 主畫面區域 -->
   <div class="user-card">
     <img id="avatar" class="user-avatar" src="https://via.placeholder.com/60" alt="大頭貼">
     <div class="user-info">
       <div id="display-name" class="user-name">載入中...</div>
       <div id="status-msg" class="user-status">準備好一起出發散步了嗎？</div>
+      <div id="save-status" class="save-status"></div>
     </div>
   </div>
 
   <div class="section-title">📍 附近散步路線</div>
 
-  <!-- 功能示範按鈕 -->
   <button class="btn-action" onclick="startWalking()">🗺️ 開啟桃園健走地圖</button>
   <button class="btn-action btn-share" onclick="shareToFriends()">📲 一鍵分享給 LINE 好友</button>
 
   <script>
-    // 
-    const MY_LIFF_ID = "2011123469-P7wxNRuU"; 
+    const MY_LIFF_ID = "2011123469-P7wxNRuU";
+    const SUPABASE_URL = "https://fwfjwtemzquisdxweeil.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_XAd29czeY0ns2tB2aMIefA_OB9OsWsA";
+
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let currentUser = null;
 
-    // 2. 頁面載入後初始化 LIFF
     window.onload = async function() {
       try {
         await liff.init({ liffId: MY_LIFF_ID });
-        
-        // 檢查使用者是否已登入 LINE
+
         if (liff.isLoggedIn()) {
-          await fetchUserProfile(); // 已登入，抓取個人資料
+          await fetchUserProfile();
         } else {
-          // 未登入（可能是在一般瀏覽器開啟），引導至 LINE 登入畫面
           liff.login();
         }
       } catch (err) {
@@ -151,38 +156,63 @@
       }
     };
 
-    // 3. 取得 LINE 使用者個人資料
     async function fetchUserProfile() {
       try {
         const profile = await liff.getProfile();
         currentUser = profile;
 
-        // 將抓到的 LINE 資訊塞入 DOM 元素中
         document.getElementById("display-name").textContent = profile.displayName + " 夥伴";
         if (profile.pictureUrl) {
           document.getElementById("avatar").src = profile.pictureUrl;
         }
 
-        // 隱藏載入遮罩
         document.getElementById("loading-mask").style.display = "none";
+
+        await saveUserToDatabase(profile);
       } catch (err) {
         console.error("取得 Profile 失敗：", err);
       }
     }
 
-    // 4. 觸發位置與路線功能
+    async function saveUserToDatabase(profile) {
+      const statusEl = document.getElementById("save-status");
+      statusEl.textContent = "正在儲存資料...";
+
+      try {
+        const { data, error } = await supabaseClient
+          .from("users")
+          .upsert(
+            {
+              line_user_id: profile.userId,
+              display_name: profile.displayName,
+              picture_url: profile.pictureUrl || null
+            },
+            { onConflict: "line_user_id" }
+          );
+
+        if (error) {
+          console.error("存入資料庫失敗：", error);
+          statusEl.textContent = "資料儲存失敗（可再試一次）";
+        } else {
+          console.log("使用者資料已存入資料庫");
+          statusEl.textContent = "資料已同步 ✓";
+        }
+      } catch (err) {
+        console.error("儲存過程發生錯誤：", err);
+        statusEl.textContent = "資料儲存發生錯誤";
+      }
+    }
+
     function startWalking() {
       if (!navigator.geolocation) {
         alert("您的手機未開啟定位服務喔！");
         return;
       }
-      // 請求手機 GPS 權限
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
           alert(`📍 定位成功！\n您的位置為：緯度 ${lat.toFixed(4)}, 經度 ${lng.toFixed(4)}\n準備跳轉至地圖選單...`);
-          // 這裡可以接上導向地圖頁面的邏輯
         },
         (err) => {
           alert("無法取得您的位置，請確認手機是否有開啟定位權限服務！");
@@ -190,9 +220,7 @@
       );
     }
 
-    // 5. 使用 LIFF 原生分享功能 (Share Target Picker)
     async function shareToFriends() {
-      // 檢查環境是否支援分享圖卡功能
       if (liff.isApiAvailable('shareTargetPicker')) {
         try {
           const result = await liff.shareTargetPicker([
@@ -214,3 +242,4 @@
   </script>
 </body>
 </html>
+
